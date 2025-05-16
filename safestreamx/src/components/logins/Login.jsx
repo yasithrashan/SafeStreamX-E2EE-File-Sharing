@@ -32,7 +32,7 @@ const Login = () => {
   const handleGoogleSignIn = async () => {
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
       // Redirect will be handled by the useEffect above
     } catch (error) {
       console.error("Error signing in with Google:", error);
