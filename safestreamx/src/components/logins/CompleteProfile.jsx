@@ -402,7 +402,10 @@ const CompleteProfile = () => {
                   onChange={handlePhoneChange}
                   inputClass="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md shadow-sm text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   buttonClass="bg-gray-700 border border-gray-600 rounded-l-md"
-                  dropdownClass="bg-gray-700 text-gray-100"
+                  dropdownClass="bg-gray-700 text-gray-100" 
+                  containerClass="react-tel-input"
+                  searchClass="search-box"
+                  enableSearch={true}
                 />
               </div>
               <p className="mt-2 text-xs text-gray-400">

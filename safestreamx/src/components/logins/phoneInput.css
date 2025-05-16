@@ -1,0 +1,31 @@
+/* phoneInput.css */
+/* Ensure dropdown text is clearly visible */
+.react-tel-input .country-list {
+  @apply bg-gray-800 !important;
+  @apply text-white !important;
+  @apply shadow-lg !important;
+  @apply border border-gray-600 !important;
+}
+
+/* Highlight selected item */
+.react-tel-input .country-list .highlight {
+  @apply bg-gray-600 !important;
+}
+
+/* Improve hover state */
+.react-tel-input .country-list .country:hover {
+  @apply bg-gray-600 !important;
+}
+
+/* Style the search box */
+.react-tel-input .search-box {
+  @apply bg-gray-900 !important;
+  @apply text-white !important;
+  @apply border border-gray-600 !important;
+}
+
+/* Style the country name and dial code */
+.react-tel-input .country-name,
+.react-tel-input .dial-code {
+  @apply text-white !important;
+}
