@@ -1,10 +1,6 @@
 # SafeStreamX
 
 <p align="center">
-  <img src="https://via.placeholder.com/200x200" alt="SafeStreamX Logo" width="200"/>
-</p>
-
-<p align="center">
   <strong>Secure File Sharing with End-to-End Encryption</strong>
 </p>
 
