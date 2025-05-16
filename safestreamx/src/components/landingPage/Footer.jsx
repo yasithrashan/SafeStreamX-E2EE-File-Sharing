@@ -22,7 +22,7 @@ const socialLinks = [
   },
   {
     name: 'GitHub',
-    href: '#',
+    href: 'https://github.com/yasithrashan',
     icon: (
       <path
         fillRule="evenodd"
