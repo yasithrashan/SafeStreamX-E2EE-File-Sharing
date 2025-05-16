@@ -1,8 +1,14 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 
 const Navbar = () => {
   return (
-    <nav className="bg-gray-900 border-b border-gray-700 shadow-sm">
+    <motion.nav
+      initial={{ y: -50, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.6 }}
+      className="bg-gray-900 border-b border-gray-700 shadow-sm"
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
@@ -14,24 +20,20 @@ const Navbar = () => {
                   strokeLinejoin="round" 
                   stroke="currentColor" />
               </svg>
-              <span className="text-xl font-bold">SafeStreamX</span>
+              <span className="text-lg sm:text-xl font-bold">SafeStreamX</span>
             </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <button
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors"
-            >
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-sm font-medium shadow-sm transition-colors">
               Log In
             </button>
-            <button 
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors"
-            >
+            <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-sm font-medium shadow-sm transition-colors">
               Sign Up
             </button>
           </div>
         </div>
       </div>
-    </nav>
+    </motion.nav>
   );
 };
 

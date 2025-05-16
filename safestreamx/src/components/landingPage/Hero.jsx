@@ -1,42 +1,46 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 
 const Hero = () => {
   return (
     <div className="relative overflow-hidden">
       <div className="max-w-7xl mx-auto">
-        <div className="relative z-10 pb-8 sm:pb-16 md:pb-20 lg:w-full lg:pb-28 xl:pb-32">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="relative z-10 pb-10 sm:pb-16 md:pb-20 lg:w-full lg:pb-28 xl:pb-32"
+        >
           <main className="mt-10 mx-auto max-w-7xl px-4 sm:mt-12 sm:px-6 md:mt-16 lg:mt-20 xl:mt-28">
             <div className="text-center">
-              <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl">
-                <span className="text-gray-100">Secure File Sharing with </span>
-                <span className="text-indigo-400">End-to-End Encryption</span>
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight">
+                <span className="text-gray-100 block">Secure File Sharing with</span>
+                <span className="text-indigo-400 block">End-to-End Encryption</span>
               </h1>
-              <p className="mt-3 max-w-md mx-auto text-base text-gray-400 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl">
+              <p className="mt-3 max-w-md mx-auto text-sm sm:text-base md:text-lg text-gray-400 md:mt-5 md:max-w-2xl">
                 Share files with confidence. Your data is encrypted before it leaves your device,
                 ensuring only the intended recipients can access your information.
               </p>
               <div className="mt-5 max-w-md mx-auto sm:flex sm:justify-center md:mt-8">
-                <div className="rounded-md shadow">
-                  <button 
-                    className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white md:py-4 md:text-lg md:px-10"
-                  >
-                    Get Started
-                  </button>
-                </div>
-                <div className="mt-3 rounded-md shadow sm:mt-0 sm:ml-3">
-                  <a
-                    href="#features"
-                    className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md bg-gray-800 text-gray-100 md:py-4 md:text-lg md:px-10"
-                  >
-                    Learn More
-                  </a>
-                </div>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="w-full sm:w-auto flex items-center justify-center px-6 py-2 md:px-10 md:py-4 border border-transparent text-sm md:text-lg font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  Get Started
+                </motion.button>
+                <a
+                  href="#features"
+                  className="mt-3 sm:mt-0 sm:ml-3 w-full sm:w-auto flex items-center justify-center px-6 py-2 md:px-10 md:py-4 border border-transparent text-sm md:text-lg font-medium rounded-md bg-gray-800 text-gray-100"
+                >
+                  Learn More
+                </a>
               </div>
             </div>
           </main>
-        </div>
+        </motion.div>
       </div>
-      
+
       {/* Wave Divider */}
       <div className="absolute bottom-0 w-full text-gray-800">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320" fill="currentColor">

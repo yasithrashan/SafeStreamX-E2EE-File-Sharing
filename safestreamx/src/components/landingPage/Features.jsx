@@ -1,5 +1,6 @@
 import React from 'react';
 import FeatureItem from './FeatureItem';
+import { motion } from 'framer-motion';
 
 const Features = () => {
   const featuresList = [
@@ -42,32 +43,37 @@ const Features = () => {
   ];
 
   return (
-    <div id="features" className="py-12 bg-gray-800">
+    <motion.section
+      id="features"
+      className="py-12 bg-gray-800"
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.6 }}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="lg:text-center">
-          <h2 className="text-base text-indigo-400 font-semibold tracking-wide uppercase">Features</h2>
-          <p className="mt-2 text-3xl font-extrabold tracking-tight text-gray-100 sm:text-4xl">
+          <h2 className="text-sm sm:text-base text-indigo-400 font-semibold tracking-wide uppercase">Features</h2>
+          <p className="mt-2 text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-gray-100">
             Everything you need for secure file sharing
           </p>
-          <p className="mt-4 max-w-2xl text-gray-400 lg:mx-auto">
+          <p className="mt-4 max-w-2xl text-sm sm:text-base text-gray-400 lg:mx-auto">
             SafeStreamX provides a comprehensive solution for secure file sharing with top-tier encryption and an intuitive user experience.
           </p>
         </div>
 
-        <div className="mt-10">
-          <div className="space-y-10 md:space-y-0 md:grid md:grid-cols-2 md:gap-x-8 md:gap-y-10">
-            {featuresList.map((feature, index) => (
-              <FeatureItem 
-                key={index}
-                icon={feature.icon}
-                title={feature.title}
-                description={feature.description}
-              />
-            ))}
-          </div>
+        <div className="mt-10 grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-x-8 md:gap-y-10">
+          {featuresList.map((feature, index) => (
+            <FeatureItem
+              key={index}
+              icon={feature.icon}
+              title={feature.title}
+              description={feature.description}
+            />
+          ))}
         </div>
       </div>
-    </div>
+    </motion.section>
   );
 };
 
