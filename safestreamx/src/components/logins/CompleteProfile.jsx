@@ -5,6 +5,7 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { auth, db, storage } from '../../firebase/config.js'; 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 
@@ -26,6 +27,94 @@ const CompleteProfile = () => {
   const [error, setError] = useState('');
   const [timer, setTimer] = useState(300); // 5 minutes countdown
   const [resendDisabled, setResendDisabled] = useState(true);
+
+  // Custom styles for the phone input in dark mode
+  const customPhoneInputStyles = `
+    /* Main container */
+    .react-tel-input {
+      font-family: inherit;
+    }
+
+    /* Main input field */
+    .react-tel-input .form-control {
+      width: 100%;
+      background-color: #374151 !important; /* Dark background */
+      border: 1px solid #4B5563 !important; /* Dark border */
+      color: #F3F4F6 !important; /* Light text */
+      box-shadow: none !important;
+      height: 42px;
+    }
+
+    /* Flag dropdown button */
+    .react-tel-input .flag-dropdown {
+      background-color: #374151 !important; /* Dark background */
+      border: 1px solid #4B5563 !important; /* Dark border */
+      border-right: none !important;
+    }
+
+    /* Open dropdown button */
+    .react-tel-input .flag-dropdown.open {
+      background-color: #4B5563 !important; /* Slightly lighter when open */
+      border-color: #6366F1 !important; /* Indigo highlight */
+    }
+
+    /* Selected flag */
+    .react-tel-input .selected-flag {
+      background-color: #374151 !important; /* Dark background */
+      padding: 0 8px 0 11px;
+    }
+
+    .react-tel-input .selected-flag:hover, 
+    .react-tel-input .selected-flag:focus {
+      background-color: #4B5563 !important; /* Slightly lighter on hover */
+    }
+
+    /* Arrow in dropdown */
+    .react-tel-input .selected-flag .arrow {
+      border-top-color: #9CA3AF !important; /* Gray arrow */
+    }
+
+    .react-tel-input .selected-flag .arrow.up {
+      border-bottom-color: #9CA3AF !important; /* Gray arrow when open */
+    }
+
+    /* Dropdown menu */
+    .react-tel-input .country-list {
+      background-color: #1F2937 !important; /* Dark background */
+      border-color: #4B5563 !important; /* Dark border */
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5) !important;
+      max-height: 220px !important;
+    }
+
+    /* Country item in dropdown */
+    .react-tel-input .country-list .country {
+      color: #F3F4F6 !important; /* Light text */
+    }
+
+    /* Hover state for country item */
+    .react-tel-input .country-list .country:hover,
+    .react-tel-input .country-list .country.highlight {
+      background-color: #374151 !important; /* Darker on hover */
+    }
+
+    /* Search box */
+    .react-tel-input .search-box {
+      background-color: #374151 !important; /* Dark background */
+      border-color: #4B5563 !important; /* Dark border */
+      color: #F3F4F6 !important; /* Light text */
+    }
+
+    /* The selected country */
+    .react-tel-input .country-list .country.highlight {
+      background-color: #4F46E5 !important; /* Indigo highlight */
+    }
+
+    /* Country name and dial code */
+    .react-tel-input .country-name, 
+    .react-tel-input .dial-code {
+      color: #F3F4F6 !important; /* Light text */
+    }
+  `;
 
   useEffect(() => {
     // Check if user is logged in
@@ -75,6 +164,39 @@ const CompleteProfile = () => {
 
     return () => clearInterval(interval);
   }, [step, timer]);
+
+  // Setup RecaptchaVerifier
+  useEffect(() => {
+    // Only set up recaptcha in step 2
+    if (step === 2) {
+      // Clear any existing recaptcha
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+      }
+
+      // Create new recaptcha verifier
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        'size': 'invisible',
+        'callback': () => {
+          // reCAPTCHA solved, allow signInWithPhoneNumber.
+          console.log('reCAPTCHA verified');
+        },
+        'expired-callback': () => {
+          // Response expired. Ask user to solve reCAPTCHA again.
+          console.log('reCAPTCHA expired');
+          setError('reCAPTCHA verification expired. Please try again.');
+        }
+      });
+    }
+
+    // Clean up function
+    return () => {
+      if (window.recaptchaVerifier && step !== 2) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
+      }
+    };
+  }, [step]);
 
   const handleImageChange = (e) => {
     if (e.target.files[0]) {
@@ -163,18 +285,18 @@ const CompleteProfile = () => {
       }
       
       try {
-        // Initialize reCAPTCHA verifier
+        // Ensure the reCaptcha verifier exists
         if (!window.recaptchaVerifier) {
-          window.recaptchaVerifier = new auth.RecaptchaVerifier('recaptcha-container', {
-            'size': 'invisible'
-          });
+          setError('Error initializing verification. Please refresh the page and try again.');
+          return;
         }
         
         const appVerifier = window.recaptchaVerifier;
-        const phoneNumber = `+${formData.countryCode}${formData.phoneNumber.replace(/\D/g, '')}`;
+        // Format the phone number correctly
+        const phoneNumber = `+${formData.phoneNumber}`;
         
         // Send verification code
-        const confirmationResult = await auth.signInWithPhoneNumber(phoneNumber, appVerifier);
+        const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
         setVerificationId(confirmationResult);
         
         // Start timer
@@ -184,7 +306,17 @@ const CompleteProfile = () => {
         setStep(3);
       } catch (error) {
         console.error("Error sending verification code:", error);
-        setError('Failed to send verification code. Please try again.');
+        setError('Failed to send verification code: ' + (error.message || 'Please try again.'));
+        
+        // Reset captcha on error
+        if (window.recaptchaVerifier) {
+          window.recaptchaVerifier.clear();
+        }
+        
+        // Re-initialize the reCaptcha
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          'size': 'invisible'
+        });
       }
     }
   };
@@ -217,15 +349,20 @@ const CompleteProfile = () => {
   const handleResendCode = async () => {
     try {
       // Reset reCAPTCHA verifier
-      window.recaptchaVerifier = new auth.RecaptchaVerifier('recaptcha-container', {
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+      }
+      
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
         'size': 'invisible'
       });
       
       const appVerifier = window.recaptchaVerifier;
-      const phoneNumber = `+${formData.countryCode}${formData.phoneNumber.replace(/\D/g, '')}`;
+      // Format the phone number correctly
+      const phoneNumber = `+${formData.phoneNumber}`;
       
       // Resend verification code
-      const confirmationResult = await auth.signInWithPhoneNumber(phoneNumber, appVerifier);
+      const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
       setVerificationId(confirmationResult);
       
       // Reset timer
@@ -235,7 +372,7 @@ const CompleteProfile = () => {
       setError('');
     } catch (error) {
       console.error("Error resending verification code:", error);
-      setError('Failed to resend verification code. Please try again.');
+      setError('Failed to resend verification code: ' + (error.message || 'Please try again.'));
     }
   };
 
@@ -249,6 +386,9 @@ const CompleteProfile = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 sm:px-6 lg:px-8">
+      {/* Add the phone input styles */}
+      <style>{customPhoneInputStyles}</style>
+      
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -305,7 +445,7 @@ const CompleteProfile = () => {
           <p className="mt-1 text-sm text-gray-400">
             {step === 1 && 'We need a few more details to secure your account'}
             {step === 2 && 'Enter your phone number to verify your account'}
-            {step === 3 && `Enter the 6-digit code sent to +${formData.countryCode} ${formData.phoneNumber}`}
+            {step === 3 && `Enter the 6-digit code sent to +${formData.phoneNumber}`}
           </p>
         </div>
 
@@ -401,11 +541,11 @@ const CompleteProfile = () => {
                   value={formData.phoneNumber}
                   onChange={handlePhoneChange}
                   inputClass="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md shadow-sm text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  buttonClass="bg-gray-700 border border-gray-600 rounded-l-md"
-                  dropdownClass="bg-gray-700 text-gray-100" 
                   containerClass="react-tel-input"
                   searchClass="search-box"
                   enableSearch={true}
+                  preferredCountries={['us', 'ca', 'gb']}
+                  placeholder="Enter your phone number"
                 />
               </div>
               <p className="mt-2 text-xs text-gray-400">
