@@ -1,10 +1,5 @@
 # SafeStreamX
 
-<div align="center">
-  <img src="/api/placeholder/400/200" alt="SafeStreamX Logo" />
-  <h3>Secure End-to-End Encrypted File Sharing Platform</h3>
-</div>
-
 ## 🔒 Overview
 
 SafeStreamX is a modern web application that enables secure file sharing with true end-to-end encryption. Files are encrypted in the browser before upload and decrypted only after download, ensuring that not even our servers can access your data. Built with React and Firebase, SafeStreamX provides a seamless user experience without compromising on security.
@@ -38,7 +33,7 @@ SafeStreamX is a modern web application that enables secure file sharing with tr
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/safestreamx.git
+   git clone https://github.com/yasithrashan/SafeStreamX-E2EE-File-Sharing.git
    cd safestreamx
    ```
 
@@ -177,7 +172,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🧑‍💻 Developers
 
-- Your Name - [@yourgithub](https://github.com/yourgithub)
+- Yasith Rashan - [@yasithrashan](https://github.com/yasithrashan)
 
 ## 🙏 Acknowledgements
 
