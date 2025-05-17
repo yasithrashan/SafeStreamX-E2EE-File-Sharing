@@ -52,60 +52,82 @@ const CreateFolderModal = ({ isOpen, onClose, parentFolder = null, onFolderCreat
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        {/* Background overlay */}
-        <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-          <div className="absolute inset-0 bg-gray-900 opacity-75"></div>
-        </div>
+    <div className="fixed inset-0 z-50 overflow-auto flex items-center justify-center">
+      {/* Background overlay with backdrop blur effect */}
+      <div 
+        className="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-filter backdrop-blur-sm transition-all" 
+        aria-hidden="true" 
+        onClick={onClose}
+        style={{
+          backdropFilter: 'blur(5px)',
+          WebkitBackdropFilter: 'blur(5px)'
+        }}
+      ></div>
 
-        {/* Modal Panel */}
-        <div className="inline-block align-bottom bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-          <form onSubmit={handleSubmit}>
-            <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-              <div className="sm:flex sm:items-start">
-                <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                  <h3 className="text-lg leading-6 font-medium text-gray-100">
-                    Create New Folder
-                  </h3>
-                  <div className="mt-4">
-                    <input
-                      type="text"
-                      name="folderName"
-                      id="folderName"
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder="Folder Name"
-                      value={folderName}
-                      onChange={(e) => setFolderName(e.target.value)}
-                      autoFocus
-                    />
-                    {error && (
-                      <p className="mt-2 text-sm text-red-400">{error}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-              <button
-                type="submit"
-                disabled={isCreating}
-                className={`w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white 
-                  ${isCreating ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'} 
-                  focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm`}
-              >
-                {isCreating ? 'Creating...' : 'Create'}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-500 shadow-sm px-4 py-2 bg-gray-800 text-base font-medium text-gray-300 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+      {/* Modal Panel */}
+      <div className="bg-gray-800 rounded-lg overflow-hidden shadow-xl transform transition-all max-w-lg w-full m-4 z-50 relative">
+        <div className="px-6 py-4 border-b border-gray-700 flex justify-between items-center">
+          <h3 className="text-lg font-medium text-gray-100">Create New Folder</h3>
+          <button 
+            type="button" 
+            className="text-gray-400 hover:text-gray-200" 
+            onClick={onClose}
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
+        
+        <form onSubmit={handleSubmit}>
+          <div className="px-6 py-4">
+            <div className="mb-4">
+              <label htmlFor="folderName" className="block text-sm font-medium text-gray-300 mb-2">
+                Folder Name
+              </label>
+              <input
+                type="text"
+                name="folderName"
+                id="folderName"
+                className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Enter folder name"
+                value={folderName}
+                onChange={(e) => setFolderName(e.target.value)}
+                autoFocus
+              />
+              {error && (
+                <p className="mt-2 text-sm text-red-400">{error}</p>
+              )}
+            </div>
+          </div>
+          
+          <div className="bg-gray-700 px-6 py-4 flex justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="mr-3 px-4 py-2 bg-gray-600 border border-transparent rounded-md shadow-sm text-sm font-medium text-gray-300 hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-gray-500"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isCreating}
+              className={`px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white 
+                ${isCreating ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'} 
+                focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-indigo-500`}
+            >
+              {isCreating ? (
+                <span className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Creating...
+                </span>
+              ) : 'Create Folder'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
