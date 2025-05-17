@@ -74,6 +74,14 @@ const Footer = () => {
             <p className="text-center text-base text-gray-400">
               &copy; 2025 SafeStreamX, Inc. All rights reserved.
             </p>
+            <motion.p 
+              className="text-center text-sm text-indigo-400 mt-2 cursor-pointer"
+              whileHover={{ scale: 1.05 }}
+              transition={{ type: 'spring', stiffness: 300 }}
+              onClick={() => window.location.href = 'https://yasithrashan.online'}
+            >
+              Created by Yasith Rashan
+            </motion.p>
           </div>
         </div>
       </div>
