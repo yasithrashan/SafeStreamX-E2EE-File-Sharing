@@ -5,23 +5,31 @@
       "headers": [
         {
           "key": "Cross-Origin-Opener-Policy",
-          "value": "unsafe-none"
+          "value": "same-origin"
         },
         {
           "key": "Cross-Origin-Embedder-Policy",
-          "value": "unsafe-none"
+          "value": "require-corp"
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' data: blob:; style-src * 'unsafe-inline'; img-src * data: blob:; font-src * data:; frame-src *;"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'none';"
         },
         {
           "key": "Referrer-Policy",
-          "value": "no-referrer-when-downgrade"
+          "value": "strict-origin-when-cross-origin"
         },
         {
           "key": "X-Content-Type-Options",
           "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
         }
       ]
     }

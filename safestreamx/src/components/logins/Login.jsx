@@ -508,402 +508,336 @@ import { auth, db } from '../../firebase/config.js';
 
 const Login = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [authMessage, setAuthMessage] = useState("Please wait...");
-  
-  // Use refs to track state across redirects
   const authInProgressRef = useRef(false);
-  const processingLoginRef = useRef(false);
-  const redirectTimeoutRef = useRef(null);
-  
-  // Debug logging function
-  const log = (message, data = '') => {
-    console.log(`[${new Date().toISOString().slice(11, 19)}] ${message}`, data);
-  };
+  const isMobileRef = useRef(false);
+  const lastAuthTimeRef = useRef(0);
+  const navigatingRef = useRef(false);
+  const processedAuthRef = useRef(false);
 
-  // Clear URL parameters helper
-  const clearUrlParams = () => {
-    try {
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } catch (e) {
-      log('Error clearing URL params', e);
+  // Detect if device is mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = window.navigator.userAgent.toLowerCase();
+      isMobileRef.current = /android|webos|iphone|ipad|ipod|blackberry|windows phone/.test(userAgent);
+      console.log("Device detected as:", isMobileRef.current ? "mobile" : "desktop");
+    };
+    
+    checkMobile();
+    
+    // Check if we're in the process of authentication
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('authStart')) {
+      console.log("Auth start parameter detected");
+      authInProgressRef.current = true;
+      
+      // Store the timestamp when auth started
+      lastAuthTimeRef.current = parseInt(urlParams.get('authStart') || Date.now());
     }
+  }, []);
+
+  // Function to navigate safely
+  const safeNavigate = (path) => {
+    if (navigatingRef.current) {
+      console.log("Navigation already in progress, skipping duplicate");
+      return;
+    }
+    
+    navigatingRef.current = true;
+    console.log(`Navigating to: ${path}`);
+    
+    // Clear auth parameters from URL before navigating
+    window.history.replaceState({}, document.title, window.location.pathname);
+    
+    // Add a small delay for UI to update
+    setTimeout(() => {
+      navigate(path);
+    }, 500);
   };
 
-  // Check for redirect result immediately on component mount
+  // Handle redirect results as soon as component mounts - critical for mobile flows
   useEffect(() => {
     const checkRedirectResult = async () => {
-      // Check if we're in a loading state
-      if (isAuthenticating || processingLoginRef.current) {
-        log('Already processing auth, skipping duplicate check');
-        return;
-      }
-      
       try {
-        log('Checking for redirect result');
-        setIsAuthenticating(true);
-        setAuthMessage("Checking authentication status...");
-        processingLoginRef.current = true;
+        console.log("Checking for redirect result...");
         
-        // Check for redirect result
+        if (processedAuthRef.current) {
+          console.log("Already processed auth in this session, skipping redirect check");
+          return;
+        }
+        
+        // Check if we need to run this - must be something in URL or auth in progress
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasAuthParams = urlParams.has('authStart');
+        const recentAuth = (Date.now() - lastAuthTimeRef.current) < 60000; // 1 minute window
+        
+        // Skip if we have no evidence of auth flow
+        if (!hasAuthParams && !recentAuth && !authInProgressRef.current) {
+          console.log("No auth parameters, skipping redirect result check");
+          return;
+        }
+        
+        // Get redirect result - this is crucial for iOS
         const result = await getRedirectResult(auth);
-        
         if (result?.user) {
-          log('Redirect result successful', {email: result.user.email});
-          setAuthMessage("Authentication successful!");
-          
-          // Process the user login
+          console.log("Found user from redirect result:", result.user.email);
+          processedAuthRef.current = true;
           await handleUserLogin(result.user);
         } else {
-          log('No redirect result found');
+          console.log("No redirect result found, checking current user");
           
-          // Check if we already have a user anyway
+          // Check if we already have a user
           const currentUser = auth.currentUser;
-          if (currentUser) {
-            log('User already authenticated', {email: currentUser.email});
+          if (currentUser && hasAuthParams) {
+            console.log("User already authenticated:", currentUser.email);
+            processedAuthRef.current = true;
             await handleUserLogin(currentUser);
-          } else {
-            // No auth in progress, hide the loading state
-            setIsAuthenticating(false);
-            processingLoginRef.current = false;
+          } else if (hasAuthParams) {
+            // We had auth params but no user - maybe wait a bit more
+            console.log("Auth parameters present but no user yet");
+            setTimeout(() => {
+              // Final check - if we still have auth params but no navigation happened
+              if (!navigatingRef.current && !processedAuthRef.current) {
+                console.log("Auth flow abandoned or failed, resetting UI");
+                // Clear URL parameters
+                window.history.replaceState({}, document.title, window.location.pathname);
+              }
+            }, 5000); // Reasonable timeout
           }
         }
       } catch (error) {
-        log('Error processing redirect result', error);
-        setError("Authentication error: " + (error.message || "Please try again"));
-        setIsAuthenticating(false);
-        processingLoginRef.current = false;
-        
-        // Clear any URL parameters
-        clearUrlParams();
+        console.error("Error checking redirect result:", error);
+        setError("Authentication error. Please try again.");
       }
     };
     
-    // Start checking for redirect result
+    // Run this check immediately
     checkRedirectResult();
-    
-    // Set up timeout for mobile
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) {
-      redirectTimeoutRef.current = setTimeout(() => {
-        if (isAuthenticating) {
-          log('Redirect timeout reached');
-          setIsAuthenticating(false);
-          setError("Authentication timed out. Please try again.");
-          processingLoginRef.current = false;
-        }
-      }, 45000); // 45 second timeout for mobile
-    }
-    
-    return () => {
-      // Clear timeout on unmount
-      if (redirectTimeoutRef.current) {
-        clearTimeout(redirectTimeoutRef.current);
-      }
-    };
   }, []);
-  
-  // Set up auth state listener to catch auth state changes
+
+  // Add a separate auth state listener for continuous monitoring
   useEffect(() => {
-    log('Setting up auth state monitor');
+    console.log("Setting up auth state monitor");
     
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      log('Auth state changed', user ? {email: user.email} : 'No user');
+    const globalAuthMonitor = onAuthStateChanged(auth, async (user) => {
+      console.log("Auth state changed - user:", user ? user.email : "none");
       
-      // If we're not already processing a login and have a user
-      if (user && !processingLoginRef.current) {
-        log('Processing auth state change with valid user');
-        processingLoginRef.current = true;
-        
-        setIsAuthenticating(true);
-        setAuthMessage("Detected sign-in, preparing your account...");
-        
-        // Process the login
-        handleUserLogin(user).catch(err => {
-          log('Error processing auth state login', err);
-          setIsAuthenticating(false);
-          processingLoginRef.current = false;
-          setError("Failed to complete login. Please try again.");
-        });
-      }
-    });
-    
-    // Clean up subscription
-    return () => unsubscribe();
-  }, []);
-  
-  // Handle user login and redirect
-  const handleUserLogin = async (user) => {
-    try {
-      if (!user) {
-        log('handleUserLogin called with no user');
-        setIsAuthenticating(false);
-        processingLoginRef.current = false;
+      // Don't duplicate auth handling if we've processed via redirect
+      if (processedAuthRef.current) {
+        console.log("Auth already processed, ignoring auth state change");
         return;
       }
       
-      log('Processing login for user', user.email);
-      setAuthMessage("Verifying your account...");
+      // Process user login if:
+      // 1. We have a user
+      // 2. AND We're in an auth flow (auth in progress or URL has authStart)
+      // 3. AND We're not already navigating
+      const urlParams = new URLSearchParams(window.location.search);
+      const hasAuthParams = urlParams.has('authStart');
+      const recentAuth = (Date.now() - lastAuthTimeRef.current) < 60000; // 1 minute window
       
-      // Check if user exists in database
+      if (user && (authInProgressRef.current || hasAuthParams || recentAuth) && !navigatingRef.current) {
+        console.log("Auth state change detected with valid user during auth flow");
+        
+        // Mark as processed to prevent duplicate handling
+        processedAuthRef.current = true;
+        
+        // Process login
+        await handleUserLogin(user);
+      }
+    });
+    
+    return () => globalAuthMonitor();
+  }, []);
+
+  // Handle user login and redirection logic
+  const handleUserLogin = async (user) => {
+    try {
+      if (!user) {
+        console.error("handleUserLogin called with no user");
+        return;
+      }
+      
+      // Skip if we're already navigating
+      if (navigatingRef.current) {
+        console.log("Already navigating, skipping duplicate login handling");
+        return;
+      }
+      
+      console.log("Processing login for user:", user.email);
+      
+      // Check if user exists in our database
       const userRef = doc(db, 'users', user.uid);
       const userDoc = await getDoc(userRef);
       
       if (userDoc.exists() && userDoc.data().phoneVerified) {
         // User exists and is verified - redirect to dashboard
-        log('User verified, preparing dashboard redirect');
-        setAuthMessage("Welcome back! Preparing your dashboard...");
-        
         // Update last login
         await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
         
-        // Clear URL parameters
-        clearUrlParams();
-        
-        // Add delay for mobile UX
-        setTimeout(() => {
-          log('Navigating to dashboard');
-          processingLoginRef.current = false;
-          navigate('/dashboard');
-        }, 1000);
+        // Critical for mobile - using safeNavigate to prevent duplicate navigations
+        console.log("User verified, redirecting to dashboard...");
+        safeNavigate('/dashboard');
       } else if (userDoc.exists()) {
-        // User exists but not completely onboarded
-        log('User needs profile completion');
-        setAuthMessage("Please complete your profile setup...");
-        
-        // Clear URL parameters
-        clearUrlParams();
-        
-        setTimeout(() => {
-          log('Navigating to complete profile');
-          processingLoginRef.current = false;
-          navigate('/complete-profile');
-        }, 1000);
+        // User exists but not fully onboarded
+        console.log("User needs profile completion");
+        safeNavigate('/complete-profile');
       } else {
         // New user - create user document
-        log('Creating new user document');
-        setAuthMessage("Creating your new account...");
-        
+        console.log("Creating new user document");
         await setDoc(userRef, {
           uid: user.uid,
           email: user.email,
-          displayName: user.displayName || '',
-          photoURL: user.photoURL || '',
+          displayName: user.displayName,
+          photoURL: user.photoURL,
           createdAt: serverTimestamp(),
           lastLogin: serverTimestamp(),
           phoneVerified: false
         });
-        
-        // Clear URL parameters
-        clearUrlParams();
-        
-        setTimeout(() => {
-          log('Navigating to complete profile for new user');
-          processingLoginRef.current = false;
-          navigate('/complete-profile');
-        }, 1000);
+        safeNavigate('/complete-profile');
       }
     } catch (error) {
-      log('Error processing user login', error);
-      setError("Unable to complete login. Please try again.");
-      setIsAuthenticating(false);
-      processingLoginRef.current = false;
+      console.error("Error processing login:", error);
+      setError("Unable to complete login process. Please try again.");
       
-      // Clear URL parameters
-      clearUrlParams();
-      
-      // If we can't process login, sign out to reset state
+      // If we encounter errors during user processing, sign out to clean state
       try {
         await signOut(auth);
       } catch (e) {
-        log('Error signing out after login failure', e);
+        console.error("Error signing out:", e);
       }
+      
+      // Reset auth state
+      authInProgressRef.current = false;
+      navigatingRef.current = false;
+      processedAuthRef.current = false;
     }
   };
-  
-  // Handle Google sign in
+
+  // Handle Google sign in with mobile-specific improvements
+  // Add state for button text
+  const [buttonText, setButtonText] = useState("Continue with Google");
+
   const handleGoogleSignIn = async () => {
     try {
-      // Prevent multiple sign-in attempts
-      if (loading || isAuthenticating) {
-        log('Auth already in progress, ignoring tap');
+      // Skip if already in progress
+      if (navigatingRef.current || authInProgressRef.current) {
+        console.log("Auth already in progress, ignoring duplicate click");
         return;
       }
       
-      setLoading(true);
       setError(null);
+      setButtonText("Signing in...");
       
-      log('Starting Google sign-in process');
-      
-      // Show authentication overlay
-      setIsAuthenticating(true);
-      setAuthMessage("Connecting to Google...");
-      
-      // Mark auth as in progress
+      // Mark that auth is in progress
       authInProgressRef.current = true;
+      lastAuthTimeRef.current = Date.now();
       
-      // Set persistence to session
+      // Set persistence to ensure auth state survives redirects
       await setPersistence(auth, browserSessionPersistence);
-      log('Set auth persistence to session');
+      console.log("Set auth persistence to browserSessionPersistence");
       
-      // Sign out any existing user to ensure clean auth flow
+      // Clear any existing auth session to ensure a clean start
       try {
-        if (auth.currentUser) {
-          await signOut(auth);
-          log('Signed out existing user before new auth');
-        }
+        await signOut(auth);
+        console.log("Signed out existing user before new auth");
       } catch (e) {
-        log('No active session to sign out');
+        console.log("No active session to sign out from");
       }
       
-      // Set up Google provider
+      // Setup Google auth provider with optimal settings for mobile
       const provider = new GoogleAuthProvider();
+      
+      // Important scopes
       provider.addScope('profile');
       provider.addScope('email');
       
-      // Force account selection
+      // For mobile - CRITICAL - force account selection EVERY time
       provider.setCustomParameters({
         prompt: 'select_account'
       });
       
-      // Detect device type
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      
-      if (isMobile) {
-        // MOBILE: Always use redirect for mobile
-        log('Using redirect auth for mobile device');
-        setAuthMessage("Redirecting to Google sign-in...");
+      // Mobile-specific logic
+      if (isMobileRef.current) {
+        console.log("Using mobile authentication flow");
         
-        // Set a timeout in case redirect fails
-        redirectTimeoutRef.current = setTimeout(() => {
-          log('Redirect timeout reached');
-          setIsAuthenticating(false);
-          setError("Authentication timed out. Please try again.");
-          authInProgressRef.current = false;
-          processingLoginRef.current = false;
-        }, 45000); // 45 seconds
+        // Add auth parameter to track state across redirects - use timestamp for debugging
+        const timestamp = Date.now();
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('authStart', timestamp.toString());
+        window.history.replaceState({}, document.title, currentUrl.toString());
         
-        // Perform redirect auth
-        log('Starting redirect auth flow');
-        await signInWithRedirect(auth, provider);
-        // Page will reload after this
+        // Reset the processedAuth flag as we're starting a new auth flow
+        processedAuthRef.current = false;
+        
+        // iOS Safari specific tweak - slightly longer delay before redirect
+        setTimeout(async () => {
+          try {
+            console.log("Initiating redirect auth flow with timestamp:", timestamp);
+            await signInWithRedirect(auth, provider);
+            // Page will reload after this
+          } catch (redirectError) {
+            console.error("Error during redirect:", redirectError);
+            authInProgressRef.current = false;
+            setButtonText("Continue with Google");
+            setError("Failed to connect to Google. Please try again.");
+          }
+        }, 800); // Increased delay for iOS
       } else {
-        // DESKTOP: Try popup first, fallback to redirect
+        // Desktop logic
         try {
-          log('Using popup auth for desktop');
-          setAuthMessage("Please select your Google account...");
-          
+          console.log("Using desktop popup authentication");
           const result = await signInWithPopup(auth, provider);
-          log('Popup auth successful');
-          
-          // Process user directly
+          console.log("Popup auth successful");
+          // Process the user directly since we already have the result
           await handleUserLogin(result.user);
         } catch (popupError) {
-          log('Popup error', popupError);
+          console.log("Popup error:", popupError);
           
-          // Handle user-closed popup
           if (popupError.code === 'auth/popup-closed-by-user' || 
               popupError.code === 'auth/cancelled-popup-request') {
-            log('Popup was closed by user');
-            setIsAuthenticating(false);
+            console.log("Popup was closed or cancelled");
             authInProgressRef.current = false;
-            setLoading(false);
-            return;
+            setButtonText("Continue with Google");
+          } else {
+            // For other errors, try redirect as fallback
+            console.log("Popup error, falling back to redirect");
+            
+            // Add auth parameter
+            const timestamp = Date.now();
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('authStart', timestamp.toString());
+            window.history.replaceState({}, document.title, currentUrl.toString());
+            
+            // Reset the processedAuth flag as we're starting a new auth flow
+            processedAuthRef.current = false;
+            
+            setTimeout(async () => {
+              await signInWithRedirect(auth, provider);
+            }, 500);
           }
-          
-          // For other errors, fall back to redirect
-          log('Falling back to redirect auth');
-          setAuthMessage("Redirecting to Google sign-in...");
-          
-          await signInWithRedirect(auth, provider);
-          // Page will reload after this
         }
       }
     } catch (error) {
-      log('Error in sign-in process', error);
-      
-      let errorMessage = "Unable to sign in. Please try again.";
+      console.error("Error in sign-in process:", error);
+      let errorMessage = "Unable to sign in with Google. Please try again.";
       
       if (error.code === 'auth/network-request-failed') {
         errorMessage = "Network error. Please check your internet connection.";
-      } else if (error.code === 'auth/timeout') {
-        errorMessage = "Authentication timed out. Please try again.";
-      } else if (error.code === 'auth/web-storage-unsupported') {
-        errorMessage = "Your browser doesn't support web storage. Please use another browser.";
+      } else if (error.code === 'auth/user-disabled') {
+        errorMessage = "This account has been disabled. Please contact support.";
       }
       
       setError(errorMessage);
-      setIsAuthenticating(false);
+      setButtonText("Continue with Google");
       authInProgressRef.current = false;
-      processingLoginRef.current = false;
-      
-      // Clear timeout
-      if (redirectTimeoutRef.current) {
-        clearTimeout(redirectTimeoutRef.current);
-      }
-      
-      // Clear URL parameters
-      clearUrlParams();
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Cancel authentication
-  const cancelAuth = async () => {
-    log('Cancelling authentication process');
-    
-    // Clear timeout
-    if (redirectTimeoutRef.current) {
-      clearTimeout(redirectTimeoutRef.current);
-    }
-    
-    // Reset auth state
-    setIsAuthenticating(false);
-    authInProgressRef.current = false;
-    processingLoginRef.current = false;
-    setError(null);
-    
-    // Clear URL parameters
-    clearUrlParams();
-    
-    // Sign out to clean state
-    try {
-      await signOut(auth);
-      log('Signed out during cancel');
-    } catch (e) {
-      log('No active session to sign out during cancel');
+      navigatingRef.current = false;
+      processedAuthRef.current = false;
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative">
-      {/* Authentication overlay */}
-      {isAuthenticating && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md z-50 flex flex-col items-center justify-center">
-          <div className="text-center p-8 max-w-md bg-gray-800/80 rounded-xl shadow-2xl border border-gray-700/50">
-            <div className="flex justify-center mb-6">
-              <svg className="animate-spin h-16 w-16 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Signing in</h2>
-            <p className="text-indigo-300 text-lg mb-4">{authMessage}</p>
-            
-            {/* Cancel button */}
-            <button
-              onClick={cancelAuth}
-              className="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded-md transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -948,30 +882,18 @@ const Login = () => {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleGoogleSignIn}
-            disabled={loading || isAuthenticating}
-            className={`w-full flex justify-center items-center px-4 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-800 transition-all duration-200 ${(loading || isAuthenticating) ? 'opacity-70 cursor-not-allowed' : ''}`}
+            disabled={navigatingRef.current || authInProgressRef.current}
+            className="w-full flex justify-center items-center px-4 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-800 transition-all duration-200"
           >
-            {loading ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Connecting...
-              </>
-            ) : (
-              <>
-                <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
-                    <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z" />
-                    <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z" />
-                    <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z" />
-                    <path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z" />
-                  </g>
-                </svg>
-                Continue with Google
-              </>
-            )}
+            <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
+                <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z" />
+                <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z" />
+                <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z" />
+                <path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z" />
+              </g>
+            </svg>
+            {buttonText}
           </motion.button>
           
           <div className="mt-6">
