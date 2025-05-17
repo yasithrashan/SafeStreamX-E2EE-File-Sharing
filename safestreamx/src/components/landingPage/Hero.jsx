@@ -1,7 +1,14 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 const Hero = () => {
+  const navigate = useNavigate();
+
+  const handleGetStarted = () => {
+    navigate('/login');
+  };
+
   return (
     <div className="relative overflow-hidden">
       <div className="max-w-7xl mx-auto">
@@ -25,6 +32,7 @@ const Hero = () => {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
+                  onClick={handleGetStarted}
                   className="w-full sm:w-auto flex items-center justify-center px-6 py-2 md:px-10 md:py-4 border border-transparent text-sm md:text-lg font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
                   Get Started

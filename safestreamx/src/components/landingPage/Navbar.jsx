@@ -44,15 +44,7 @@ const Navbar = () => {
               onClick={handleLogin}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-sm font-medium shadow-sm transition-colors"
             >
-              Log In
-            </motion.button>
-            <motion.button 
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleSignUp}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-sm font-medium shadow-sm transition-colors"
-            >
-              Sign Up
+              Secure Login
             </motion.button>
           </div>
         </div>
