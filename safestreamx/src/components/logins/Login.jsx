@@ -20,20 +20,43 @@ const Login = () => {
   const [error, setError] = useState(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authMessage, setAuthMessage] = useState("Please wait...");
-  const popupOpenTimeRef = useRef(null);
-  const authTimeoutRef = useRef(null);
+  const authInProgressRef = useRef(false);
+  const isMobileRef = useRef(false);
+  const redirectAttemptedRef = useRef(false);
+
+  // Detect if device is mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = window.navigator.userAgent.toLowerCase();
+      isMobileRef.current = /android|webos|iphone|ipad|ipod|blackberry|windows phone/.test(userAgent);
+      console.log("Device detected as:", isMobileRef.current ? "mobile" : "desktop");
+    };
+    
+    checkMobile();
+  }, []);
+
+  // Check URL parameters for auth state
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('authStart')) {
+      console.log("Auth start parameter detected");
+      setIsAuthenticating(true);
+      setAuthMessage("Authentication in progress...");
+      authInProgressRef.current = true;
+    }
+  }, []);
 
   // Check for any lingering authentication issues on component mount
   useEffect(() => {
     const cleanupAuth = async () => {
       try {
-        // Check if we're in a weird state with auth issues
-        const currentUser = auth.currentUser;
-        if (currentUser) {
-          // If we have a user but got redirected to login page,
-          // it might indicate auth issues, so let's re-authenticate
-          await signOut(auth);
-          console.log("Cleaned up previous auth session");
+        // Only sign out if we're not in the middle of authentication
+        if (!authInProgressRef.current) {
+          const currentUser = auth.currentUser;
+          if (currentUser) {
+            await signOut(auth);
+            console.log("Cleaned up previous auth session");
+          }
         }
         
         // Set auth persistence to SESSION to avoid issues across sessions
@@ -44,81 +67,85 @@ const Login = () => {
     };
     
     cleanupAuth();
-    
-    // Cleanup timeouts on unmount
-    return () => {
-      if (authTimeoutRef.current) {
-        clearTimeout(authTimeoutRef.current);
-      }
-    };
   }, []);
 
-  // Monitor authentication state globally
+  // Handle redirect results specifically - this is crucial for mobile
   useEffect(() => {
-    const globalAuthMonitor = onAuthStateChanged(auth, (user) => {
-      // When auth state changes at all, consider it part of the auth process
-      if (user) {
-        console.log("Auth state changed - user detected in global monitor");
-        setIsAuthenticating(true);
-        setAuthMessage("Account authenticated, preparing your dashboard...");
-      }
-    });
-    
-    return () => globalAuthMonitor();
-  }, []);
-
-  // Check for redirect results and auth state
-  useEffect(() => {
-    const checkAuth = async () => {
+    const handleRedirectResult = async () => {
       try {
-        // First check for redirect result
+        console.log("Checking for redirect result...");
         const result = await getRedirectResult(auth).catch(err => {
           console.log("Redirect result error (this is often normal):", err);
           return null;
         });
         
         if (result?.user) {
-          console.log("User detected from redirect result");
+          console.log("User authenticated via redirect flow");
           setIsAuthenticating(true);
           setAuthMessage("Successfully authenticated, loading your profile...");
           await handleUserLogin(result.user);
-        }
-
-        // Then listen for auth state changes
-        const unsubscribe = auth.onAuthStateChanged(async (user) => {
-          if (user) {
-            console.log("Auth state changed - user detected in auth state monitor");
-            // If we just got a user and popupOpenTime was recent, keep overlay up
-            if (popupOpenTimeRef.current && (Date.now() - popupOpenTimeRef.current < 10000)) {
-              setIsAuthenticating(true);
-            }
-            setAuthMessage("Successfully authenticated, loading your profile...");
-            await handleUserLogin(user);
+        } else if (authInProgressRef.current) {
+          // If we thought we were authenticating but got no result
+          console.log("Auth in progress but no redirect result");
+          
+          // Check if we already have a user
+          const currentUser = auth.currentUser;
+          if (currentUser) {
+            console.log("User already authenticated:", currentUser.email);
+            setAuthMessage("Account detected, loading your profile...");
+            await handleUserLogin(currentUser);
+          } else {
+            // Clear auth state after a delay
+            setTimeout(() => {
+              if (!auth.currentUser) {
+                console.log("No auth detected after delay, resetting auth state");
+                setIsAuthenticating(false);
+                authInProgressRef.current = false;
+                // Replace URL to remove auth parameters
+                window.history.replaceState({}, document.title, window.location.pathname);
+              }
+            }, 3000);
           }
-        });
-
-        return () => unsubscribe();
+        }
       } catch (error) {
-        console.error("Auth check error:", error);
-        setError("An error occurred while checking authentication. Please try again.");
-        setLoading(false);
+        console.error("Error handling redirect result:", error);
         setIsAuthenticating(false);
+        setError("Authentication error. Please try again.");
       }
     };
+    
+    handleRedirectResult();
+  }, []);
 
-    checkAuth();
-  }, [navigate]);
+  // Monitor authentication state globally
+  useEffect(() => {
+    console.log("Setting up auth state monitor");
+    const globalAuthMonitor = onAuthStateChanged(auth, async (user) => {
+      console.log("Auth state changed - user:", user ? user.email : "none");
+      
+      if (user) {
+        authInProgressRef.current = true;
+        setIsAuthenticating(true);
+        setAuthMessage("Account authenticated, preparing your dashboard...");
+        await handleUserLogin(user);
+      }
+    });
+    
+    return () => globalAuthMonitor();
+  }, []);
 
   // Handle user login and redirection logic
   const handleUserLogin = async (user) => {
     try {
+      if (!user) {
+        console.error("handleUserLogin called with no user");
+        setIsAuthenticating(false);
+        return;
+      }
+      
+      console.log("Processing login for user:", user.email);
       setLoading(true);
       setIsAuthenticating(true);
-      
-      // Cancel any timeout that might hide the overlay
-      if (authTimeoutRef.current) {
-        clearTimeout(authTimeoutRef.current);
-      }
       
       // Update auth message to show progress
       setAuthMessage("Verified, retrieving your account details...");
@@ -135,18 +162,25 @@ const Login = () => {
         
         // Short delay to ensure the user sees the final message
         // This prevents the flash of the login screen
+        console.log("User verified, redirecting to dashboard...");
         setTimeout(() => {
+          // Clear auth parameters from URL
+          window.history.replaceState({}, document.title, window.location.pathname);
           navigate('/dashboard');
-        }, 800); // Longer delay for a smoother experience
+        }, 800);
       } else if (userDoc.exists()) {
         // User exists but not fully onboarded
         setAuthMessage("Account found, completing your profile setup...");
+        console.log("User needs profile completion");
         setTimeout(() => {
+          // Clear auth parameters from URL
+          window.history.replaceState({}, document.title, window.location.pathname);
           navigate('/complete-profile');
         }, 800);
       } else {
         // New user - create user document
         setAuthMessage("Creating your new account...");
+        console.log("Creating new user document");
         await setDoc(userRef, {
           uid: user.uid,
           email: user.email,
@@ -157,6 +191,8 @@ const Login = () => {
           phoneVerified: false
         });
         setTimeout(() => {
+          // Clear auth parameters from URL
+          window.history.replaceState({}, document.title, window.location.pathname);
           navigate('/complete-profile');
         }, 800);
       }
@@ -170,37 +206,13 @@ const Login = () => {
       } catch (e) {
         console.error("Error signing out:", e);
       }
+      // Reset auth state
+      authInProgressRef.current = false;
     } finally {
       setLoading(false);
       // Note: We don't set isAuthenticating to false here
       // since we want the overlay to remain until navigation completes
     }
-  };
-
-  // Function to ensure overlay stays visible
-  const keepOverlayVisible = () => {
-    // Set authenticating to true if not already
-    setIsAuthenticating(true);
-    
-    // Cancel any existing timeout
-    if (authTimeoutRef.current) {
-      clearTimeout(authTimeoutRef.current);
-    }
-    
-    // Record when the popup was opened
-    popupOpenTimeRef.current = Date.now();
-    
-    // Set a safety timeout to hide overlay if auth completely fails
-    // This prevents the overlay from staying forever if something goes wrong
-    authTimeoutRef.current = setTimeout(() => {
-      // If we're still on the login page after 20 seconds, something went wrong
-      if (window.location.pathname.includes('login')) {
-        console.log("Authentication timeout - hiding overlay");
-        setIsAuthenticating(false);
-        setLoading(false);
-        setError("Authentication timed out. Please try again.");
-      }
-    }, 20000); // 20 second timeout
   };
 
   // Handle Google sign in
@@ -209,117 +221,127 @@ const Login = () => {
       setLoading(true);
       setError(null);
       
+      // Mark that auth is in progress
+      authInProgressRef.current = true;
+      
       // Immediately show the overlay and ensure it stays visible
-      keepOverlayVisible();
+      setIsAuthenticating(true);
       setAuthMessage("Connecting to Google...");
       
-      // First, ensure we're signed out to prevent state conflicts
-      await signOut(auth).catch(e => {
+      // Clear any existing auth session to ensure a clean start
+      try {
+        await signOut(auth);
+        console.log("Signed out existing user before new auth");
+      } catch (e) {
         console.log("No active session to sign out from");
-      });
+      }
       
-      // Use redirect method by default - more reliable across devices and browsers
+      // Setup Google auth provider with optimal settings for mobile
       const provider = new GoogleAuthProvider();
+      
+      // Important scopes
       provider.addScope('profile');
       provider.addScope('email');
+      
+      // Critical for mobile - force account selection every time
       provider.setCustomParameters({
         prompt: 'select_account'
       });
       
-      // On desktop, try popup first for better UX
-      if (window.innerWidth > 768) {
+      // For mobile or after a failed attempt, always use redirect
+      if (isMobileRef.current || redirectAttemptedRef.current) {
+        console.log("Using redirect auth for mobile or after failed attempt");
+        
+        // Mark that we're starting redirect auth
+        redirectAttemptedRef.current = true;
+        
+        // Add a query parameter to indicate auth is in progress
+        // This helps handle the case where the page reloads after redirect
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('authStart', 'true');
+        window.history.replaceState({}, document.title, currentUrl.toString());
+        
+        setAuthMessage("Redirecting to Google sign-in...");
+        
+        // Critical - use a slight delay before redirecting
+        // This allows the UI state to update and parameters to be saved
+        setTimeout(async () => {
+          await signInWithRedirect(auth, provider);
+        }, 300);
+      } else {
+        // On desktop, try popup first for better UX
         try {
+          console.log("Attempting popup auth on desktop");
           setAuthMessage("Please select your Google account...");
-          
-          // Add event listeners to detect if popup gets hidden
-          window.addEventListener('focus', () => {
-            console.log("Window received focus - popup may have closed");
-            // Keep overlay for a while after focus returns
-            // in case authentication is still processing
-            setTimeout(() => {
-              // Only hide if no user has been detected in the meantime
-              if (!auth.currentUser && isAuthenticating) {
-                const timeSincePopupOpened = Date.now() - (popupOpenTimeRef.current || 0);
-                // If it's been less than 2 seconds, probably just a focus change
-                // If more than 2 seconds, popup might have been closed without selecting account
-                if (timeSincePopupOpened > 2000) {
-                  console.log("Popup seems to have closed without auth - checking...");
-                  // Give a little more time for auth to complete
-                  setTimeout(() => {
-                    if (!auth.currentUser && isAuthenticating) {
-                      console.log("No auth completed within grace period - hiding overlay");
-                      setIsAuthenticating(false);
-                    }
-                  }, 2000);
-                }
-              }
-            }, 1000);
-          }, { once: true });
-          
-          // Try to sign in with popup
           const result = await signInWithPopup(auth, provider);
-          // Auth state listener will handle the redirect
+          console.log("Popup auth successful");
           setAuthMessage("Account selected, verifying...");
+          // handleUserLogin will be triggered by auth state change
         } catch (popupError) {
           console.log("Popup error:", popupError);
-          // If user closed the popup, don't show authenticating overlay
+          
+          // If popup failed, switch to redirect for next attempt
+          redirectAttemptedRef.current = true;
+          
+          // For certain errors, hide overlay and let user try again
           if (popupError.code === 'auth/popup-closed-by-user' || 
               popupError.code === 'auth/cancelled-popup-request') {
-            // Add a slight delay to make sure auth isn't still processing
-            setTimeout(() => {
-              if (!auth.currentUser) {
-                setIsAuthenticating(false);
-              }
-            }, 1000);
+            console.log("Popup was closed or cancelled");
+            setIsAuthenticating(false);
+            authInProgressRef.current = false;
           } else {
-            // Fall back to redirect for any other popup issues
+            // For other errors, try redirect immediately
+            console.log("Popup error, falling back to redirect:", popupError.code);
             setAuthMessage("Redirecting to Google sign-in...");
-            await signInWithRedirect(auth, provider);
+            
+            // Add auth parameter
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('authStart', 'true');
+            window.history.replaceState({}, document.title, currentUrl.toString());
+            
+            // Use a slight delay before redirecting
+            setTimeout(async () => {
+              await signInWithRedirect(auth, provider);
+            }, 300);
           }
         }
-      } else {
-        // On mobile, use redirect directly for better reliability
-        setAuthMessage("Redirecting to Google sign-in...");
-        await signInWithRedirect(auth, provider);
       }
     } catch (error) {
-      console.error("Error signing in with Google:", error);
+      console.error("Error in sign-in process:", error);
       let errorMessage = "Unable to sign in with Google. Please try again.";
       
       if (error.code === 'auth/network-request-failed') {
         errorMessage = "Network error. Please check your internet connection.";
-      } else if (error.code === 'auth/cancelled-popup-request') {
-        errorMessage = "Sign-in process was cancelled. Please try again.";
       } else if (error.code === 'auth/user-disabled') {
         errorMessage = "This account has been disabled. Please contact support.";
       }
       
       setError(errorMessage);
       setIsAuthenticating(false);
+      authInProgressRef.current = false;
     } finally {
       setLoading(false);
-      // Note: We don't set isAuthenticating to false here either
-      // It will stay true if auth is proceeding
+      // Note: We don't reset isAuthenticating here as it needs to stay visible during auth
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative">
-    {/* Full-screen authentication overlay with transparent blurred background */}
-    {isAuthenticating && (
-      <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md z-50 flex flex-col items-center justify-center">
-        <div className="text-center p-8 max-w-md bg-gray-800/80 rounded-xl shadow-2xl border border-gray-700/50">
-          <div className="flex justify-center mb-6">
-            <svg className="animate-spin h-16 w-16 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+      {/* Full-screen authentication overlay */}
+      {isAuthenticating && (
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md z-50 flex flex-col items-center justify-center">
+          <div className="text-center p-8 max-w-md bg-gray-800/80 rounded-xl shadow-2xl border border-gray-700/50">
+            <div className="flex justify-center mb-6">
+              <svg className="animate-spin h-16 w-16 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Signing in</h2>
+            <p className="text-indigo-300 text-lg">{authMessage}</p>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Signing in</h2>
-          <p className="text-indigo-300 text-lg">{authMessage}</p>
         </div>
-      </div>
-    )}
+      )}
 
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
