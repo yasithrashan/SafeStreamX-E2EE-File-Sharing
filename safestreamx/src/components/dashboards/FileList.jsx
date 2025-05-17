@@ -3,6 +3,7 @@ import { collection, query, where, orderBy, getDocs, doc, deleteDoc } from 'fire
 import { ref, deleteObject, getDownloadURL } from 'firebase/storage';
 import { auth, db, storage } from '../../firebase/config';
 import { importEncryptionKey, decryptFile } from '../../util/encryption.js';
+import CustomAlert from '../CustomAlert.jsx'; 
 
 const FileList = ({ currentFolder = 'root', onFolderClick }) => {
   const [files, setFiles] = useState([]);
@@ -10,6 +11,10 @@ const FileList = ({ currentFolder = 'root', onFolderClick }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
+  
+  // Add these state variables for the alert
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
 
   // Fetch files and folders when component mounts or currentFolder changes
   useEffect(() => {
@@ -101,36 +106,51 @@ const FileList = ({ currentFolder = 'root', onFolderClick }) => {
     }
   };
 
-  // Handle file deletion
-  const handleDelete = async (item) => {
-    if (!window.confirm(`Are you sure you want to delete ${item.name}?`)) {
-      return;
-    }
-    
+  // Handle delete button click - Show confirmation dialog
+  const handleDeleteClick = (item, e) => {
+    e.stopPropagation();
+    setItemToDelete(item);
+    setShowDeleteAlert(true);
+  };
+
+  // Handle delete confirmation
+  const handleConfirmDelete = async () => {
     try {
-      if (item.type === 'file') {
+      if (!itemToDelete) return;
+      
+      if (itemToDelete.type === 'file') {
         // Delete from Storage
-        const storageRef = ref(storage, `files/${auth.currentUser.uid}/${item.id}`);
+        const storageRef = ref(storage, `files/${auth.currentUser.uid}/${itemToDelete.id}`);
         await deleteObject(storageRef);
         
         // Delete from Firestore
-        await deleteDoc(doc(db, 'files', item.id));
+        await deleteDoc(doc(db, 'files', itemToDelete.id));
         
         // Update UI
-        setFiles(files.filter(f => f.id !== item.id));
+        setFiles(files.filter(f => f.id !== itemToDelete.id));
       } else {
         // For folders, we'd need to check if it's empty first
         // and potentially delete all contents recursively
         // This is a simplified version
-        await deleteDoc(doc(db, 'folders', item.id));
+        await deleteDoc(doc(db, 'folders', itemToDelete.id));
         
         // Update UI
-        setFolders(folders.filter(f => f.id !== item.id));
+        setFolders(folders.filter(f => f.id !== itemToDelete.id));
       }
     } catch (error) {
       console.error('Error deleting item:', error);
       alert('Failed to delete: ' + error.message);
+    } finally {
+      // Reset alert state
+      setShowDeleteAlert(false);
+      setItemToDelete(null);
     }
+  };
+
+  // Handle cancel delete
+  const handleCancelDelete = () => {
+    setShowDeleteAlert(false);
+    setItemToDelete(null);
   };
 
   // Format file size for display
@@ -282,10 +302,7 @@ const FileList = ({ currentFolder = 'root', onFolderClick }) => {
           </div>
           <div className="w-24 flex justify-end">
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDelete(folder);
-              }}
+              onClick={(e) => handleDeleteClick(folder, e)}
               className="text-red-400 hover:text-red-300 ml-2"
               title="Delete folder"
             >
@@ -334,10 +351,7 @@ const FileList = ({ currentFolder = 'root', onFolderClick }) => {
                 </svg>
               </button>
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(file);
-                }}
+                onClick={(e) => handleDeleteClick(file, e)}
                 className="text-red-400 hover:text-red-300 ml-2"
                 title="Delete file"
               >
@@ -387,6 +401,14 @@ const FileList = ({ currentFolder = 'root', onFolderClick }) => {
           )}
         </div>
       ))}
+
+      {/* Custom Alert Dialog */}
+      <CustomAlert
+        isOpen={showDeleteAlert}
+        message={itemToDelete ? `Are you sure you want to delete ${itemToDelete.name}?` : ''}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </div>
   );
 };
