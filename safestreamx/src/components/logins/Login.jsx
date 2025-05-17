@@ -22,9 +22,9 @@ const Login = () => {
   const [authMessage, setAuthMessage] = useState("Please wait...");
   const authInProgressRef = useRef(false);
   const isMobileRef = useRef(false);
-  const redirectAttemptedRef = useRef(false);
   const lastAuthTimeRef = useRef(0);
   const navigatingRef = useRef(false);
+  const processedAuthRef = useRef(false); // New ref to track if we've processed auth
 
   // Detect if device is mobile
   useEffect(() => {
@@ -45,7 +45,7 @@ const Login = () => {
       authInProgressRef.current = true;
       
       // Store the timestamp when auth started
-      lastAuthTimeRef.current = Date.now();
+      lastAuthTimeRef.current = parseInt(urlParams.get('authStart') || Date.now());
     }
   }, []);
 
@@ -68,104 +68,107 @@ const Login = () => {
     }, 500);
   };
 
-  // Handle redirect results and auth state together
+  // Handle redirect results as soon as component mounts - critical for mobile flows
   useEffect(() => {
-    const handleAuthentication = async () => {
+    const checkRedirectResult = async () => {
       try {
-        console.log("Checking for authentication...");
+        console.log("Checking for redirect result...");
         
-        // First check for redirect result
-        let user = null;
-        
-        // Check if we recently started auth (within last 30 seconds)
-        const recentAuthAttempt = (Date.now() - lastAuthTimeRef.current) < 30000;
-        
-        try {
-          console.log("Checking for redirect result...");
-          const result = await getRedirectResult(auth);
-          if (result?.user) {
-            console.log("User authenticated via redirect flow:", result.user.email);
-            user = result.user;
-          }
-        } catch (redirectError) {
-          console.log("Error getting redirect result:", redirectError);
-          // Continue to check current user even if redirect check fails
+        if (processedAuthRef.current) {
+          console.log("Already processed auth in this session, skipping redirect check");
+          return;
         }
         
-        // If we didn't get a user from redirect, check current auth state
-        if (!user) {
-          console.log("Checking current auth state...");
-          user = auth.currentUser;
-          if (user) {
-            console.log("User already authenticated:", user.email);
-          }
+        // Check if we need to run this - must be something in URL or auth in progress
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasAuthParams = urlParams.has('authStart');
+        const recentAuth = (Date.now() - lastAuthTimeRef.current) < 60000; // 1 minute window
+        
+        // Skip if we have no evidence of auth flow
+        if (!hasAuthParams && !recentAuth && !authInProgressRef.current) {
+          console.log("No auth parameters, skipping redirect result check");
+          return;
         }
         
-        // If we have a user and auth is in progress, proceed with login
-        if (user && (authInProgressRef.current || recentAuthAttempt)) {
-          console.log("Processing user login after authentication");
-          setIsAuthenticating(true);
-          setAuthMessage("Successfully authenticated, loading your profile...");
-          await handleUserLogin(user);
-        } 
-        else if (authInProgressRef.current && !user) {
-          console.log("Auth in progress but no user detected");
+        // Set loading state while we check
+        setIsAuthenticating(true);
+        setAuthMessage("Verifying your authentication...");
+        
+        // Get redirect result - this is crucial for iOS
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          console.log("Found user from redirect result:", result.user.email);
+          processedAuthRef.current = true;
+          await handleUserLogin(result.user);
+        } else {
+          console.log("No redirect result found, checking current user");
           
-          // Keep showing overlay for a reasonable time
-          // After this, if no auth completes, we'll reset
-          setTimeout(() => {
-            if (!auth.currentUser && !navigatingRef.current) {
-              console.log("No user authenticated after timeout, resetting auth state");
-              setIsAuthenticating(false);
-              authInProgressRef.current = false;
-              window.history.replaceState({}, document.title, window.location.pathname);
-            }
-          }, 10000); // 10 second timeout
+          // Check if we already have a user
+          const currentUser = auth.currentUser;
+          if (currentUser && hasAuthParams) {
+            console.log("User already authenticated:", currentUser.email);
+            processedAuthRef.current = true;
+            await handleUserLogin(currentUser);
+          } else if (hasAuthParams) {
+            // We had auth params but no user - maybe wait a bit more
+            console.log("Auth parameters present but no user yet, maintaining overlay");
+            setTimeout(() => {
+              // Final check - if we still have auth params but no navigation happened
+              if (!navigatingRef.current && !processedAuthRef.current) {
+                console.log("Auth flow abandoned or failed, resetting UI");
+                setIsAuthenticating(false);
+                // Clear URL parameters
+                window.history.replaceState({}, document.title, window.location.pathname);
+              }
+            }, 5000); // Reasonable timeout
+          } else {
+            // No evidence we are in an auth flow
+            setIsAuthenticating(false);
+          }
         }
       } catch (error) {
-        console.error("Error in authentication check:", error);
+        console.error("Error checking redirect result:", error);
         setIsAuthenticating(false);
         setError("Authentication error. Please try again.");
       }
     };
     
-    handleAuthentication();
+    // Run this check immediately
+    checkRedirectResult();
   }, []);
 
-  // Add a separate auth state listener with special mobile handling
+  // Add a separate auth state listener for continuous monitoring
   useEffect(() => {
     console.log("Setting up auth state monitor");
-    
-    // Flag to track the first auth state change
-    let initialAuthCheckComplete = false;
     
     const globalAuthMonitor = onAuthStateChanged(auth, async (user) => {
       console.log("Auth state changed - user:", user ? user.email : "none");
       
-      // Skip immediate auth check at load if we're not actively authenticating
-      if (!initialAuthCheckComplete) {
-        initialAuthCheckComplete = true;
-        
-        // Only process this initial user if we're in auth process
-        if (!authInProgressRef.current && !navigatingRef.current && 
-            !window.location.search.includes('authStart')) {
-          console.log("Skipping initial auth state - not in auth process");
-          return;
-        }
+      // Don't duplicate auth handling if we've processed via redirect
+      if (processedAuthRef.current) {
+        console.log("Auth already processed, ignoring auth state change");
+        return;
       }
       
-      if (user) {
-        // Record successful auth
-        authInProgressRef.current = true;
-        lastAuthTimeRef.current = Date.now();
+      // Process user login if:
+      // 1. We have a user
+      // 2. AND We're in an auth flow (auth in progress or URL has authStart)
+      // 3. AND We're not already navigating
+      const urlParams = new URLSearchParams(window.location.search);
+      const hasAuthParams = urlParams.has('authStart');
+      const recentAuth = (Date.now() - lastAuthTimeRef.current) < 60000; // 1 minute window
+      
+      if (user && (authInProgressRef.current || hasAuthParams || recentAuth) && !navigatingRef.current) {
+        console.log("Auth state change detected with valid user during auth flow");
+        
+        // Mark as processed to prevent duplicate handling
+        processedAuthRef.current = true;
         
         setIsAuthenticating(true);
         setAuthMessage("Account authenticated, preparing your dashboard...");
         
-        // Small delay to ensure state update
-        setTimeout(async () => {
-          await handleUserLogin(user);
-        }, 300);
+        // Process login
+        await handleUserLogin(user);
       }
     });
     
@@ -242,6 +245,7 @@ const Login = () => {
       // Reset auth state
       authInProgressRef.current = false;
       navigatingRef.current = false;
+      processedAuthRef.current = false;
     } finally {
       setLoading(false);
       // We don't hide the overlay - it stays until navigation completes
@@ -268,6 +272,10 @@ const Login = () => {
       setIsAuthenticating(true);
       setAuthMessage("Connecting to Google...");
       
+      // Set persistence to ensure auth state survives redirects
+      await setPersistence(auth, browserSessionPersistence);
+      console.log("Set auth persistence to browserSessionPersistence");
+      
       // Clear any existing auth session to ensure a clean start
       try {
         await signOut(auth);
@@ -292,24 +300,30 @@ const Login = () => {
       if (isMobileRef.current) {
         console.log("Using mobile authentication flow");
         
-        // Add auth parameter to track state across redirects
+        // Add auth parameter to track state across redirects - use timestamp for debugging
+        const timestamp = Date.now();
         const currentUrl = new URL(window.location.href);
-        currentUrl.searchParams.set('authStart', Date.now().toString());
+        currentUrl.searchParams.set('authStart', timestamp.toString());
         window.history.replaceState({}, document.title, currentUrl.toString());
         
         setAuthMessage("Redirecting to Google sign-in...");
         
-        // Critical for mobile - slightly longer delay before redirect
+        // Reset the processedAuth flag as we're starting a new auth flow
+        processedAuthRef.current = false;
+        
+        // iOS Safari specific tweak - slightly longer delay before redirect
         setTimeout(async () => {
           try {
+            console.log("Initiating redirect auth flow with timestamp:", timestamp);
             await signInWithRedirect(auth, provider);
-            // The page will reload after this
+            // Page will reload after this
           } catch (redirectError) {
             console.error("Error during redirect:", redirectError);
             setIsAuthenticating(false);
+            authInProgressRef.current = false;
             setError("Failed to connect to Google. Please try again.");
           }
-        }, 500);
+        }, 800); // Increased delay for iOS
       } else {
         // Desktop logic
         try {
@@ -318,7 +332,8 @@ const Login = () => {
           const result = await signInWithPopup(auth, provider);
           console.log("Popup auth successful");
           setAuthMessage("Account selected, verifying...");
-          // Auth state change will trigger handleUserLogin
+          // Process the user directly since we already have the result
+          await handleUserLogin(result.user);
         } catch (popupError) {
           console.log("Popup error:", popupError);
           
@@ -333,9 +348,13 @@ const Login = () => {
             setAuthMessage("Redirecting to Google sign-in...");
             
             // Add auth parameter
+            const timestamp = Date.now();
             const currentUrl = new URL(window.location.href);
-            currentUrl.searchParams.set('authStart', Date.now().toString());
+            currentUrl.searchParams.set('authStart', timestamp.toString());
             window.history.replaceState({}, document.title, currentUrl.toString());
+            
+            // Reset the processedAuth flag as we're starting a new auth flow
+            processedAuthRef.current = false;
             
             setTimeout(async () => {
               await signInWithRedirect(auth, provider);
@@ -357,6 +376,7 @@ const Login = () => {
       setIsAuthenticating(false);
       authInProgressRef.current = false;
       navigatingRef.current = false;
+      processedAuthRef.current = false;
     } finally {
       setLoading(false);
     }
