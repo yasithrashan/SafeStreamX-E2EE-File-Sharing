@@ -26,4 +26,12 @@ const storage = getStorage(app);
 // Add RecaptchaVerifier to auth
 auth.RecaptchaVerifier = RecaptchaVerifier;
 
+// Make sure storage has CORS configured with custom settings
+// For local development
+storage._customUrlOrRegion = {
+  bucket: "safestreamx.firebasestorage.app",
+  // This doesn't actually change CORS settings - you need to do that via the Firebase Console or CLI
+  // as explained in the CORS configuration guide
+};
+
 export { auth, db, storage };
