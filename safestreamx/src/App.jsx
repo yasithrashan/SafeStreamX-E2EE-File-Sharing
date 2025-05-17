@@ -7,7 +7,8 @@ import { auth } from './firebase/config';
 import LandingPage from './components/landingPage/LandingPage';
 import Login from './components/logins/Login';
 import CompleteProfile from './components/logins/CompleteProfile';
-import { Dashboard } from './components/dashboards/Dashboard';
+import Dashboard from './components/dashboards/Dashboard';
+
 // import Login from './components/Login';
 // import CompleteProfile from './components/CompleteProfile';
 // import Dashboard from './components/Dashboard';
