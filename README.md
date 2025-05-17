@@ -1,97 +1,40 @@
 # SafeStreamX
 
-<p align="center">
-  <strong>Secure File Sharing with End-to-End Encryption</strong>
-</p>
+<div align="center">
+  <img src="/api/placeholder/400/200" alt="SafeStreamX Logo" />
+  <h3>Secure End-to-End Encrypted File Sharing Platform</h3>
+</div>
 
-<p align="center">
-  <a href="#features">Features</a> •
-  <a href="#technology-stack">Technology Stack</a> •
-  <a href="#architecture">Architecture</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#usage">Usage</a> •
-  <a href="#security">Security</a> •
-  <a href="#roadmap">Roadmap</a> •
-  <a href="#contributing">Contributing</a> •
-  <a href="#license">License</a>
-</p>
+## 🔒 Overview
 
-## Overview
+SafeStreamX is a modern web application that enables secure file sharing with true end-to-end encryption. Files are encrypted in the browser before upload and decrypted only after download, ensuring that not even our servers can access your data. Built with React and Firebase, SafeStreamX provides a seamless user experience without compromising on security.
 
-SafeStreamX is a modern, secure file sharing system that uses end-to-end encryption (E2EE) to ensure only intended recipients can access shared files. Files are encrypted client-side before upload and decrypted client-side after download, guaranteeing that not even the service providers can access your data.
+## ✨ Features
 
-## Features
+- **End-to-End Encryption (E2EE)**: AES-256 encryption happens client-side
+- **Zero-Knowledge Architecture**: We never see your unencrypted files or keys
+- **Secure File Sharing**: Share files via secure, expiring, or one-time-use links
+- **Folder Organization**: Create and manage folders for your files
+- **User Authentication**: Secure login via Firebase Authentication
+- **Responsive Design**: Works on desktop and mobile devices
+- **Real-time Progress**: Monitor encryption and upload progress
 
-### Core Features
+## 🛠️ Technology Stack
 
-- **End-to-End Encryption (E2EE)**: All files are encrypted using AES-256 before being uploaded
-- **User Authentication**: Secure login and registration using Firebase Authentication
-- **Secure File Sharing**: Share encrypted files through secure, expiring, or one-time-use links
-- **File Metadata**: Metadata is stored securely in Firebase Database
-- **File Expiration**: Set automatic expiration times for shared files
-- **User Dashboard**: Manage uploads, downloads, and sharing from a central dashboard
+- **Frontend**: React (Vite), Tailwind CSS
+- **Backend**: Firebase (Authentication, Firestore, Storage, Functions)
+- **Encryption**: Web Crypto API (AES-256, RSA-OAEP)
+- **Deployment**: Firebase Hosting
 
-### Security Features
-
-- **Multi-Party Authorization**: Optional feature requiring approval from multiple authorized parties before file access is granted
-- **Zero-Knowledge Architecture**: The platform never has access to unencrypted files or decryption keys
-- **Detailed Access Logs**: Track when files are accessed and by whom
-- **Auto-Expiring Links**: Links can be set to expire after a certain time, number of downloads, or both
-- **Password-Protected Sharing**: Add an additional layer of security with password protection
-
-## Technology Stack
-
-### Frontend
-- **Framework**: React (using Vite)
-- **Styling**: Tailwind CSS
-- **Encryption**: Web Crypto API (AES-256)
-
-### Backend
-- **Server**: Node.js with Express
-- **Serverless Functions**: Firebase Functions
-- **Authentication**: Firebase Authentication
-- **Database**: Firebase Realtime Database
-- **Storage**: Firebase Storage
-
-### Deployment
-- **Frontend Hosting**: Firebase Hosting
-- **Backend Hosting**: Firebase Functions (Serverless)
-
-## Architecture
-
-SafeStreamX follows a secure-by-design architecture:
-
-1. **Client-Side Encryption**: Files are encrypted in the browser before upload
-2. **Secure Authentication**: Firebase Authentication handles user authentication securely
-3. **Separated Storage**: File content and metadata are stored separately
-4. **Key Management**: Encryption keys never leave the client, ensuring true E2EE
-5. **Backend Security**: Server-side validation ensures proper authorization for all actions
-
-### Data Flow
-
-```
-┌─────────────┐     Encrypt     ┌────────────┐     Upload     ┌─────────────┐
-│ Client File ├────────────────►│ Encrypted  ├───────────────►│ Firebase    │
-└─────────────┘                 │ File       │                │ Storage     │
-                                └────────────┘                └─────────────┘
-                                                                     │
-                                                                     │ Store
-                                                                     ▼
-┌─────────────┐    Generate     ┌────────────┐     Store      ┌─────────────┐
-│ Sharing     ├────────────────►│ Secure     ├───────────────►│ Firebase    │
-│ Parameters  │                 │ Link       │                │ Database    │
-└─────────────┘                 └────────────┘                └─────────────┘
-```
-
-## Installation
-
-### Prerequisites
+## 📋 Prerequisites
 
 - Node.js (v16 or higher)
 - npm or yarn
 - Firebase account
 
-### Setup
+## 🚀 Getting Started
+
+### Installation
 
 1. Clone the repository:
    ```bash
@@ -103,91 +46,114 @@ SafeStreamX follows a secure-by-design architecture:
    ```bash
    npm install
    # or
-   yarn
+   yarn install
    ```
 
-3. Create a Firebase project and setup:
-   - Create a new project in Firebase console
-   - Enable Authentication, Storage, and Realtime Database
-   - Add a web app to your Firebase project
-   - Copy the Firebase configuration
+3. Create a Firebase project:
+   - Go to [Firebase Console](https://console.firebase.google.com/)
+   - Create a new project
+   - Set up Authentication, Firestore, and Storage services
 
-4. Create environment files:
-   ```bash
-   # Create .env.local in the root directory
-   cp .env.example .env.local
+4. Configure Firebase:
+   - Create a `.env` file in the root directory
+   - Add your Firebase configuration:
+   ```
+   VITE_FIREBASE_API_KEY=your_api_key
+   VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
+   VITE_FIREBASE_PROJECT_ID=your_project_id
+   VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+   VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+   VITE_FIREBASE_APP_ID=your_app_id
    ```
 
-5. Update `.env.local` with your Firebase configuration
-
-6. Start the development server:
+5. Run the development server:
    ```bash
    npm run dev
    # or
    yarn dev
    ```
 
-## Usage
+6. Open [http://localhost:5173](http://localhost:5173) to view the app in your browser.
 
-### User Registration and Login
+### Firebase Configuration
 
-1. Create an account using email/password or Google OAuth
-2. Verify your email address
-3. Log in to access the dashboard
+Set up the following Firestore collections:
+- `users`: Stores user information
+- `files`: Stores file metadata and encryption details
+- `folders`: Stores folder structure information
 
-### Uploading Files
+Configure Firebase Storage security rules:
+```
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /files/{userId}/{fileId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+```
 
-1. From the dashboard, click "Upload File"
-2. Select files from your device
-3. Files will be encrypted in your browser before being uploaded
-4. Set optional parameters (expiration, permissions, etc.)
-5. Click "Upload" to complete the process
+Configure Firestore security rules:
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /files/{fileId} {
+      allow read: if request.auth != null && resource.data.ownerId == request.auth.uid;
+      allow write: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
+    }
+    match /folders/{folderId} {
+      allow read: if request.auth != null && resource.data.ownerId == request.auth.uid;
+      allow write: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
+    }
+  }
+}
+```
 
-### Sharing Files
+## 🔐 How the Encryption Works
 
-1. From the dashboard, select the file you want to share
-2. Click "Share" and configure sharing options:
-   - Expiration time
-   - Download limits
-   - Password protection
-   - Authorized recipients
-3. Generate and copy the secure link
-4. Share the link with your intended recipient
+SafeStreamX uses a hybrid encryption approach:
 
-### Accessing Shared Files
+1. **File Encryption**:
+   - A unique AES-256 key is generated for each file
+   - Files are encrypted using AES-GCM mode with a random initialization vector (IV)
+   - The encrypted file is uploaded to Firebase Storage
 
-1. Open the secure link in a web browser
-2. Authenticate if required (password, email verification)
-3. The file will be downloaded and decrypted in your browser
+2. **Key Protection**:
+   - Each user has an RSA key pair (generated client-side)
+   - File encryption keys are themselves encrypted with the recipient's public RSA key
+   - Encrypted keys are stored in Firestore
 
-## Security
+3. **Sharing Process**:
+   - When sharing a file, the system creates a secure link
+   - Recipients use their private key to decrypt the file key
+   - The file key is then used to decrypt the file content
 
-SafeStreamX implements multiple layers of security:
+## 📁 Project Structure
 
-- **Encryption Algorithm**: AES-256 (industry standard)
-- **Key Management**: Keys are generated in the browser and never sent to the server
-- **Transport Security**: All API communication uses HTTPS
-- **Authentication**: Firebase Authentication with support for MFA
-- **Authorization**: Fine-grained access controls for each file
-- **Audit Logging**: All access attempts are logged
+```
+safestreamx/
+├── src/
+│   ├── components/
+│   │   ├── auth/           # Authentication related components
+│   │   ├── dashboard/      # Dashboard and file management components
+│   │   └── shared/         # Shared UI components
+│   ├── contexts/           # React contexts for state management
+│   ├── firebase/           # Firebase configuration
+│   ├── pages/              # Route components
+│   ├── util/               # Utility functions
+│   │   └── encryption.js   # Encryption/decryption utilities
+│   ├── App.jsx             # Main application component
+│   └── main.jsx            # Entry point
+├── public/                 # Static assets
+├── .env                    # Environment variables (not committed to git)
+├── vite.config.js          # Vite configuration
+└── package.json            # Dependencies and scripts
+```
 
-### Security Considerations
-
-- SafeStreamX cannot access or recover your files if encryption keys are lost
-- Always share links through secure channels
-- For maximum security, use password protection and short expiration times
-
-## Roadmap
-
-- [ ] Mobile application (iOS and Android)
-- [ ] Desktop sync client
-- [ ] Advanced sharing permissions
-- [ ] Enterprise features (SSO, team management)
-- [ ] Secure messaging between users
-- [ ] File version history
-- [ ] Blockchain verification for access logs
-
-## Contributing
+## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -197,17 +163,28 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
-
-## License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
+## 🔮 Future Enhancements
 
-- [Firebase](https://firebase.google.com/) for authentication and storage
-- [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API) for encryption
-- All contributors and supporters of the project
+- Multi-recipient support with individual encryption keys
+- File previews for supported formats
+- Password-protected files
+- Mobile applications for Android and iOS
+- Enhanced collaboration features
+
+## 🧑‍💻 Developers
+
+- Your Name - [@yourgithub](https://github.com/yourgithub)
+
+## 🙏 Acknowledgements
+
+- [Firebase](https://firebase.google.com/)
+- [React](https://reactjs.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API)
 
 ---
 
