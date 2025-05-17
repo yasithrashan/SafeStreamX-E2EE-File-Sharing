@@ -53,15 +53,11 @@ const CreateFolderModal = ({ isOpen, onClose, parentFolder = null, onFolderCreat
 
   return (
     <div className="fixed inset-0 z-50 overflow-auto flex items-center justify-center">
-      {/* Background overlay with backdrop blur effect */}
+      {/* Completely transparent background with only blur effect */}
       <div 
-        className="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-filter backdrop-blur-sm transition-all" 
+        className="fixed inset-0 backdrop-blur-sm transition-all" 
         aria-hidden="true" 
         onClick={onClose}
-        style={{
-          backdropFilter: 'blur(5px)',
-          WebkitBackdropFilter: 'blur(5px)'
-        }}
       ></div>
 
       {/* Modal Panel */}
