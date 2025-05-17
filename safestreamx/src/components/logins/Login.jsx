@@ -109,7 +109,15 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { signInWithPopup, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { 
+  signInWithPopup, 
+  signInWithRedirect, 
+  getRedirectResult, 
+  GoogleAuthProvider,
+  browserSessionPersistence,
+  setPersistence,
+  signOut
+} from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config.js'; 
 
@@ -118,17 +126,44 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Check if user is already logged in and handle redirect result
+  // Check for any lingering authentication issues on component mount
+  useEffect(() => {
+    const cleanupAuth = async () => {
+      try {
+        // Check if we're in a weird state with auth issues
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          // If we have a user but got redirected to login page,
+          // it might indicate auth issues, so let's re-authenticate
+          await signOut(auth);
+          console.log("Cleaned up previous auth session");
+        }
+        
+        // Set auth persistence to SESSION to avoid issues across sessions
+        await setPersistence(auth, browserSessionPersistence);
+      } catch (err) {
+        console.error("Auth cleanup error:", err);
+      }
+    };
+    
+    cleanupAuth();
+  }, []);
+
+  // Check for redirect results and auth state
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Check for redirect result first
-        const result = await getRedirectResult(auth);
+        // First check for redirect result
+        const result = await getRedirectResult(auth).catch(err => {
+          console.log("Redirect result error (this is often normal):", err);
+          return null;
+        });
+        
         if (result?.user) {
           await handleUserLogin(result.user);
         }
 
-        // Then check for existing auth state
+        // Then listen for auth state changes
         const unsubscribe = auth.onAuthStateChanged(async (user) => {
           if (user) {
             await handleUserLogin(user);
@@ -178,17 +213,29 @@ const Login = () => {
     } catch (error) {
       console.error("Error processing login:", error);
       setError("Unable to complete login process. Please try again.");
+      // If we encounter errors during user processing, sign out to clean state
+      try {
+        await signOut(auth);
+      } catch (e) {
+        console.error("Error signing out:", e);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle Google sign in with popup
+  // Handle Google sign in
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
       setError(null);
       
+      // First, ensure we're signed out to prevent state conflicts
+      await signOut(auth).catch(e => {
+        console.log("No active session to sign out from");
+      });
+      
+      // Use redirect method by default - more reliable across devices and browsers
       const provider = new GoogleAuthProvider();
       provider.addScope('profile');
       provider.addScope('email');
@@ -196,20 +243,19 @@ const Login = () => {
         prompt: 'select_account'
       });
       
-      // Try popup first
-      try {
-        const result = await signInWithPopup(auth, provider);
-        // Auth state listener will handle the redirect
-      } catch (popupError) {
-        console.log("Popup error:", popupError);
-        // If popup fails, fall back to redirect (better for mobile)
-        if (popupError.code === 'auth/popup-blocked' || 
-            popupError.code === 'auth/popup-closed-by-user' ||
-            popupError.code === 'auth/internal-error') {
+      // On desktop, try popup first for better UX
+      if (window.innerWidth > 768) {
+        try {
+          const result = await signInWithPopup(auth, provider);
+          // Auth state listener will handle the redirect
+        } catch (popupError) {
+          console.log("Popup error, falling back to redirect:", popupError);
+          // Fall back to redirect for any popup issues
           await signInWithRedirect(auth, provider);
-        } else {
-          throw popupError;
         }
+      } else {
+        // On mobile, use redirect directly for better reliability
+        await signInWithRedirect(auth, provider);
       }
     } catch (error) {
       console.error("Error signing in with Google:", error);
@@ -262,6 +308,12 @@ const Login = () => {
           {error && (
             <div className="mb-4 p-3 bg-red-900/50 text-red-200 rounded-md text-sm">
               {error}
+              <button 
+                onClick={() => setError(null)} 
+                className="ml-2 text-red-200 hover:text-white focus:outline-none"
+              >
+                ✕
+              </button>
             </div>
           )}
           

@@ -5,11 +5,11 @@
       "headers": [
         {
           "key": "Cross-Origin-Opener-Policy",
-          "value": "same-origin-allow-popups"
+          "value": "unsafe-none"
         },
         {
           "key": "Cross-Origin-Embedder-Policy",
-          "value": "credentialless"
+          "value": "unsafe-none"
         },
         {
           "key": "Content-Security-Policy",
@@ -17,7 +17,7 @@
         },
         {
           "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
+          "value": "no-referrer-when-downgrade"
         },
         {
           "key": "Strict-Transport-Security",
